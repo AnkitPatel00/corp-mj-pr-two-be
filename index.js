@@ -1,6 +1,7 @@
 const initializeDatabase = require("./db/db.connect")
 const AgentModel = require('./models/salesAgent.model')
 const LeadModel = require('./models/lead.model')
+const CommentModel = require('./models/comment.model')
 const cors = require('cors')
 const express = require('express')
 const mongoose = require("mongoose")
@@ -20,7 +21,7 @@ app.get("/",(req,res) => {
 
 app.post("/api/leads", async (req, res) => {
   
-  const { name, salesAgent } = req.body
+  const { name, salesAgent,status } = req.body
   try {
 
     if (name)
@@ -30,6 +31,7 @@ app.post("/api/leads", async (req, res) => {
 return res.status(400).json({error:'name must be a string.'})
       }
     }
+
 
     if (salesAgent)
     {
@@ -47,8 +49,9 @@ return res.status(400).json({error:'name must be a string.'})
       }
     }
 
+    
+
     const newLead = new LeadModel(req.body)
-    console.log(newLead)
     const savedLead = await newLead.save()
     if (!salesAgent)
     {
@@ -76,7 +79,7 @@ return res.status(400).json({error:'name must be a string.'})
 
 
 app.get("/api/leads", async (req, res) => {
-  const { salesAgent, status, tags, source } = req.query
+  const { salesAgent, status, tags, source,sortByDay } = req.query
 
   const statusEnum =['New', 'Contacted', 'Qualified', 'Proposal Sent','Closed']
   const sourceEnum =['Website', 'Referral', 'Cold Call', 'Advertisement', 'Email', 'Other']
@@ -95,11 +98,20 @@ app.get("/api/leads", async (req, res) => {
 
   if (status)
   {
- if (!statusEnum.includes(status))
-    {
+
+
+   if ((typeof status ==="string" && !statusEnum.includes(status)))
+   {
+   
       return res.status(400).json({ error: `Invalid input: 'status' must be one of [${statusEnum.join(", ")}].` })
     }
-    query.status = status
+   else if (typeof status !=="string" && !status.every((status) => statusEnum.includes(status)))
+   {
+     return res.status(400).json({ error: `Invalid input: 'status' must be one of [${statusEnum.join(", ")}].` })
+     }
+
+      query.status = {$in:status}
+    
   }
 
   if (tags)
@@ -116,9 +128,47 @@ app.get("/api/leads", async (req, res) => {
     query.source =source
   }
 
+  if (sortByDay)
+  {
+     if (sortByDay !== "low" &&  sortByDay !== "high"  )
+  {
+    return res.status(400).json({ error: `Invalid input: 'sortByDay' must be one of [ low , high ].` })
+  }
+   }
+
+   let sortDay
+
+  sortDay = sortByDay === "low" ? { "timeToClose": 1 } : sortByDay === "high" ? { "timeToClose": -1 } : {}
+  
   try {
-    const leads = await LeadModel.find(query)
+    const leads = await LeadModel.find(query).populate("salesAgent", "name").sort(sortDay)
     res.status(200).json(leads)
+  }
+  catch (error)
+  {
+res.status(400).json({error})
+  }
+})
+
+//get lead with Id
+
+app.get("/api/leads/:leadId", async (req,res) => {
+const leadId = req.params.leadId
+    if (leadId)
+  {
+    const isValid = mongoose.Types.ObjectId.isValid(leadId)
+    if (!isValid)
+    {
+      return res.status(400).json({ error: `Invalid Id '${leadId}' for SalesAgent` })
+    }
+  }
+  try {
+    const lead = await LeadModel.findById(leadId).populate("salesAgent", "name")
+    if (!lead)
+    {
+return res.status(400).json({error:"error in getting lead"})
+    }
+res.status(200).json(lead)
   }
   catch (error)
   {
@@ -130,7 +180,7 @@ res.status(400).json({error})
 
 app.put("/api/leads/:id", async (req, res) => {
  const leadId = req.params.id
-  const { name, salesAgent } = req.body
+  const { name, salesAgent,status } = req.body
 
   if (leadId)
   {
@@ -174,7 +224,8 @@ return res.status(400).json({error:'name must be a string.'})
       }
     }
 
-    const updatedLead = await LeadModel.findOneAndUpdate({_id:leadId},req.body, { new: true,runValidators: true })
+    const updatedLead = await LeadModel.findByIdAndUpdate(leadId, { ...req.body, ...(req.body.status === "Closed" && { closedAt: Date.now() }) }, { new: true, runValidators: true })
+    
     await updatedLead.save()
     if (!updatedLead)
     {
@@ -224,7 +275,7 @@ return res.status(400).json({ error: `Invalid Id '${leadId}' for Lead` })
       return res.status(400).json({ error: "error in deleting lead" })
     }
 
-    res.status(200).json({"message": "Lead deleted successfully."})
+    res.status(200).json(deletedLead)
 
   }
   catch (error)
@@ -272,7 +323,7 @@ return res.status(409).json({ error: `Sales agent with email'${email}' already e
   }
   catch (error)
   {
-    console.log(error.name)
+   
     if (error.name === "ValidationError")
     {
       const firstError = Object.values(error.errors)[0].message
@@ -301,6 +352,147 @@ app.get("/api/agents",async(req,res) => {
   }
 })
 
+//  Fetches sales agents by Id.
+
+app.get("/api/agents/:agentId", async (req, res) => {
+
+  const agentId = req.params.agentId
+
+    if (agentId)
+  {
+    const isValidId = mongoose.Types.ObjectId.isValid(agentId)
+    if (!agentId)
+    {
+return res.status(400).json({ error: `Invalid Id '${agentId}' for Lead` })
+    }
+  }
+  try {
+    const agent = await AgentModel.findById(agentId)
+    if (!agent)
+    {
+      res.status(400).json({error:"error in fetching agents"})
+    }
+    res.status(200).json(agent)
+  }
+  catch (error)
+  {
+ return res.status(500).json({ error: "internal server error" })
+  }
+})
+
+// Comments API Adds a new comment to a specific lead.
+
+app.post("/api/leads/:id/comments", async (req,res) => {
+  const leadId = req.params.id
+  const { commentText } = req.body
+  if (commentText)
+  {
+    if (typeof commentText !== "string")
+    {
+      return res.status(400).json({error:"commentText must be a string."})
+    }
+  }
+  if (leadId)
+  {
+    const isValidId = mongoose.Types.ObjectId.isValid(leadId)
+    if (!isValidId)
+    {
+      return res.status(400).json({error:`Invalid Id '${leadId}' for Lead`})
+    }
+  }
+  try {
+
+     const isLeadExist =await LeadModel.findById(leadId)
+      if (!isLeadExist)
+    {
+      res.status(404).json({error: `Lead with ID '${leadId}' not found.`})
+    }
+
+    const newComment = new CommentModel({ lead: leadId, author: "67b5663ba5e69bc20f5bc35f", commentText })
+    const savedComment = await newComment.save()
+    if (!savedComment)
+    {
+      return res.status(400).json({error:"error is saving comment"})
+    }
+
+    const comment = await CommentModel.findById(savedComment._id).populate("author","name")
+
+    res.status(201).json(comment)
+  }
+  catch (error)
+  {
+      if (error.name === "ValidationError")
+    {
+      const firstError = Object.values(error.errors)[0].message
+      return res.status(400).json({ error:firstError })
+    }
+    res.status(500).json({ error: "internal server error" })
+    
+  }
+})
+
+//
+
+// Get All Comments for a Lead
+
+app.get("/api/leads/:id/comments", async (req,res) => {
+
+  const leadId = req.params.id
+
+   if (leadId)
+  {
+    const isValidId = mongoose.Types.ObjectId.isValid(leadId)
+    if (!isValidId)
+    {
+      return res.status(400).json({error:`Invalid Id '${leadId}' for Lead`})
+    }
+  }
+  try {
+    const allComments = await CommentModel.find({ lead: leadId }).populate("author","name")
+    res.status(200).json(allComments)
+  }
+  catch (error)
+  {
+ res.status(500).json({ error: "internal server error" })
+  }
+})
+
+//report api
+
+app.get("/api/report/last-week", async (req, res) => {
+  
+  const sevendayAgoDate = new Date()
+    
+  sevendayAgoDate.setDate(sevendayAgoDate.getDate() - 7);
+
+  console.log(sevendayAgoDate)
+
+  try {
+    const closedLeads = await LeadModel.find({ status: "Closed" ,closedAt:{$gte:sevendayAgoDate}})
+    res.status(200).json(closedLeads)
+  }
+  catch (error)
+  {
+ res.status(500).json({ error: "internal server error" })
+  }
+})
+
+
+app.get("/api/report/pipeline", async (req, res) => {
+  
+
+  try {
+    const pipelineLeads = await LeadModel.find({ status: {$ne:"Closed"} }).countDocuments()
+    res.status(200).json({
+  "totalLeadsInPipeline": pipelineLeads
+}
+)
+  }
+  catch (error)
+  {
+ res.status(500).json({ error: "internal server error" })
+  }
+})
 
 //handle invalid route
 
