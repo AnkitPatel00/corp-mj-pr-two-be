@@ -12,7 +12,21 @@ app.use(cors({ origin: "*" }))
 initializeDatabase()
 
 app.get("/",(req,res) => {
-  res.send("Welcome to Anvaya Server")
+  res.send(`<div>Welcome to Anvaya Server
+    <h3>Lead API </h3>
+    <p>Leads api (GET/POST): /api/leads</p>
+    <p>Lead by Id api (GET): /api/leads/:leadId</p>
+    <p>Lead Update by Id api (PUT): /api/leads/:leadId</p>
+    <p>Lead Delete by Id api (DELETE): /api/leads/:leadId</p>
+    <h3>Agent API </h3>
+    <p>Agent api (GET/POST): /api/agents</p>
+    <p>Agent by Id api (GET): /api/agents/:agentId</p>
+    <h3>Comment API </h3>
+    <p>Comment by lead id api (GET/POST): /api/leads/:id/comments</p>
+    <h3>Report API </h3>
+    <p>lastweek closed lead Report api (GET): /api/report/last-week</p>
+    <p>pipeline leads count Report api (GET): /api/report/pipeline</p>
+    </div>`)
 })
 
 //*Leads API/
@@ -21,7 +35,7 @@ app.get("/",(req,res) => {
 
 app.post("/api/leads", async (req, res) => {
   
-  const { name, salesAgent,status } = req.body
+  const { name, salesAgent } = req.body
   try {
 
     if (name)
