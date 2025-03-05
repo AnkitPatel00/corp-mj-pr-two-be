@@ -465,10 +465,8 @@ app.get("/api/report/last-week", async (req, res) => {
     
   sevendayAgoDate.setDate(sevendayAgoDate.getDate() - 7);
 
-  console.log(sevendayAgoDate)
-
   try {
-    const closedLeads = await LeadModel.find({ status: "Closed" ,closedAt:{$gte:sevendayAgoDate}})
+    const closedLeads = await LeadModel.find({ status: "Closed" ,closedAt:{$gte:sevendayAgoDate}}).populate("salesAgent", "name")
     res.status(200).json(closedLeads)
   }
   catch (error)
