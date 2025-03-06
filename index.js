@@ -55,7 +55,7 @@ return res.status(400).json({error:'name must be a string.'})
         return res.status(400).json({ error: `Invalid Id ${salesAgent} for SalesAgent` })
       }
 
-       const isAgentAvalable = await AgentModel.findById(salesAgent)
+       const isAgentAvalable = await AgentModel.findOne({_id:salesAgent})
 
       if (!isAgentAvalable)
       {
