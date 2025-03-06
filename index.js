@@ -156,12 +156,17 @@ app.get("/api/leads", async (req, res) => {
   
   try {
 
+    if (salesAgent)
+    {
 const isAgentAvalable = await AgentModel.findOne({ _id: salesAgent })
 
       if (!isAgentAvalable)
       {
         return res.status(404).json({error:`Sales agent with ID '${salesAgent}' not found.`})
       }
+    }
+
+
 
     const leads = await LeadModel.find(query).populate("salesAgent", "name").sort(sortDay)
     res.status(200).json(leads)
