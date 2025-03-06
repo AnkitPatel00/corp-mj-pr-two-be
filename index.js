@@ -55,7 +55,7 @@ return res.status(400).json({error:'name must be a string.'})
         return res.status(400).json({ error: `Invalid Id ${salesAgent} for SalesAgent` })
       }
 
-       const isAgentAvalable = await AgentModel.findOne({_id:salesAgent})
+      const isAgentAvalable = await AgentModel.findOne({ _id: salesAgent })
 
       if (!isAgentAvalable)
       {
@@ -155,6 +155,14 @@ app.get("/api/leads", async (req, res) => {
   sortDay = sortByDay === "low" ? { "timeToClose": 1 } : sortByDay === "high" ? { "timeToClose": -1 } : {}
   
   try {
+
+const isAgentAvalable = await AgentModel.findOne({ _id: salesAgent })
+
+      if (!isAgentAvalable)
+      {
+        return res.status(404).json({error:`Sales agent with ID '${salesAgent}' not found.`})
+      }
+
     const leads = await LeadModel.find(query).populate("salesAgent", "name").sort(sortDay)
     res.status(200).json(leads)
   }
